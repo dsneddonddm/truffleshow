@@ -30,6 +30,8 @@
         isGeneratingReport: false,
         sortBy: "verification", // Default sort
         sortDirection: "desc", // Default direction
+        supportedSources: ["Git", "Github"],
+        source: undefined,
 
         init() {
         },
@@ -40,7 +42,6 @@
 
           this.isLoading = true;
           this.error = null;
-          console.log(file);
 
           const reader = new FileReader();
           reader.onload = (e) => {
@@ -50,6 +51,9 @@
               this.expandedItems = Object.fromEntries(
                 this.truffleHogData.map((_, index) => [index, false]),
               );
+              const sourceNames = this.truffleHogData.map((finding) => Object.keys(finding.SourceMetadata.Data)[0]);
+              this.source = sourceNames.length > 0 ? sourceNames[0] : undefined;
+              console.log('Source is: ', this.source);
               this.applySorting();
               this.isFileUploaded = true;
               this.isLoading = false;
@@ -123,11 +127,11 @@
             });
           } else if (this.sortBy === "date") {
             sortedData.sort((a, b) => {
-              const dateA = a.SourceMetadata?.Data?.Github?.timestamp
-                ? new Date(a.SourceMetadata.Data.Github.timestamp)
+              const dateA = a.SourceMetadata?.Data?.[this.source]?.timestamp
+                ? new Date(a.SourceMetadata.Data[this.source].timestamp)
                 : new Date(0);
-              const dateB = b.SourceMetadata?.Data?.Github?.timestamp
-                ? new Date(b.SourceMetadata.Data.Github.timestamp)
+              const dateB = b.SourceMetadata?.Data?.[this.source]?.timestamp
+                ? new Date(b.SourceMetadata.Data[this.source].timestamp)
                 : new Date(0);
 
               return this.sortDirection === "asc"
@@ -238,9 +242,9 @@
         getUniqueRepositories() {
           const repos = this.truffleHogData
             .filter(
-              (finding) => finding.SourceMetadata?.Data?.Github?.repository,
+              (finding) => finding.SourceMetadata?.Data?.[this.source]?.repository,
             )
-            .map((finding) => finding.SourceMetadata.Data.Github.repository);
+            .map((finding) => finding.SourceMetadata.Data[this.source].repository);
           return [...new Set(repos)].length;
         },
 
@@ -265,7 +269,7 @@
           };
 
           // Use the report service to generate the report
-          ReportService.generatePDFReport(reportData)
+          ReportService.generatePDFReport(reportData, this.source);
           this.isGeneratingReport = false;
         }
       }));
@@ -295,8 +299,11 @@
         v0.1.0 <!--x-release-please-version-->
       </p>
     </h1>
-    <p class="text-center text-gray-600 dark:text-gray-400 mb-8">
+    <p class="text-center text-gray-600 dark:text-gray-400 mb-2">
       A simple web viewer for TruffleHog JSON output.
+    </p>
+    <p class="text-center text-sm text-gray-600 dark:text-gray-400 mb-8">
+      Currently supported sources: <span class="font-bold" x-text="supportedSources.join(', ')"></span>
     </p>
 
     <!-- File Upload Section -->
@@ -307,16 +314,20 @@
       </h2>
 
       <div class="mb-4">
-        <label for="fileInput" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          Select a JSON file with TruffleHog results
-        </label>
+        <p class="text-xs text-red-600 dark:text-orange-300 mb-2">
+          <i class="fas fa-exclamation-circle mr-1"></i>
+          Please pipe the output with <code class="text-white">jq -s .</code> to fix broken JSON.
+          <br />
+          See <a href="https://github.com/trufflesecurity/trufflehog/issues/2164" target="_blank"
+            class="text-blue-600 dark:text-blue-400 hover:underline">issue #2164</a> for more details.
+        </p>
         <div class="flex items-center justify-center w-full">
           <label
             class="flex flex-col w-full h-32 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 dark-transition">
             <div class="flex flex-col items-center justify-center pt-7">
               <i class="fas fa-file-arrow-up text-gray-400 dark:text-gray-500 text-3xl mb-2"></i>
               <p class="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                Click to browse or drag & drop
+                Click to browse
               </p>
               <p class="text-xs text-gray-500 dark:text-gray-500">
                 .json files only
@@ -363,7 +374,7 @@
               <template x-if="isGeneratingReport">
                 <i class="fas fa-spinner fa-spin mr-1"></i>
               </template>
-              <span x-text="isGeneratingReport ? 'Generating PDF...' : 'Download PDF'"></span>
+              <span x-text="isGeneratingReport ? 'Generating PDF...' : 'Download PDF (Beta)'"></span>
             </button>
             <button @click="resetApp"
               class="px-4 py-2 bg-teal-600 dark:bg-teal-700 text-white rounded hover:bg-teal-700 dark:hover:bg-teal-600 transition">
@@ -499,8 +510,8 @@
                   <div class="flex items-center space-x-2 overflow-hidden">
                     <div class="font-medium text-gray-800 dark:text-white" x-text="finding.DetectorName"></div>
 
-                    <template x-if="finding.SourceMetadata?.Data?.Github?.link">
-                      <a :href="finding.SourceMetadata.Data.Github.link" target="_blank"
+                    <template x-if="finding.SourceMetadata?.Data?.[source]?.link">
+                      <a :href="finding.SourceMetadata.Data[source].link" target="_blank"
                         class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                         @click.stop>
                         <i class="fas fa-arrow-up-right-from-square"></i>
@@ -510,30 +521,30 @@
                 </div>
 
                 <div class="flex items-center space-x-3">
-                  <template x-if="finding.SourceMetadata?.Data?.Github?.timestamp">
+                  <template x-if="finding.SourceMetadata?.Data?.[source]?.timestamp">
                     <div class="hidden md:flex items-center text-sm text-gray-600 dark:text-gray-400">
                       <i class="far fa-clock mr-1"></i>
-                      <span x-text="`${renderTimestamp(finding.SourceMetadata.Data.Github.timestamp)}`"></span>
+                      <span x-text="`${renderTimestamp(finding.SourceMetadata.Data[source].timestamp)}`"></span>
                     </div>
                   </template>
 
-                  <template x-if="finding.SourceMetadata?.Data?.Github?.repository">
-                    <a :href="finding.SourceMetadata.Data.Github.repository" target="_blank"
+                  <template x-if="finding.SourceMetadata?.Data?.[source]?.repository">
+                    <a :href="finding.SourceMetadata.Data[source].repository" target="_blank"
                       class="hidden md:flex items-center text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                       @click.stop>
                       <i class="fas fa-code-branch mr-1"></i>
                       <span
-                        x-text="finding.SourceMetadata.Data.Github.repository.replace('https://github.com/', '').replace('.git', '')"></span>
+                        x-text="finding.SourceMetadata.Data[source].repository.replace('https://github.com/', '').replace('.git', '')"></span>
                     </a>
                   </template>
 
-                  <template x-if="finding.SourceMetadata?.Data?.Github?.commit">
-                    <a :href="finding.SourceMetadata.Data.Github.repository ? finding.SourceMetadata.Data.Github.repository.replace('.git', '') + '/commit/' + finding.SourceMetadata.Data.Github.commit : '#'"
+                  <template x-if="finding.SourceMetadata?.Data?.[source]?.commit">
+                    <a :href="finding.SourceMetadata.Data[source].repository ? finding.SourceMetadata.Data[source].repository.replace('.git', '') + '/commit/' + finding.SourceMetadata.Data[source].commit : '#'"
                       target="_blank"
                       class="hidden md:flex items-center text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                       @click.stop>
                       <i class="fas fa-code-commit mr-1"></i>
-                      <span x-text="truncate(finding.SourceMetadata.Data.Github.commit, 7)"></span>
+                      <span x-text="truncate(finding.SourceMetadata.Data[source].commit, 7)"></span>
                     </a>
                   </template>
 
@@ -572,54 +583,54 @@
                 </div>
 
                 <!-- GitHub Info if available -->
-                <template x-if="finding.SourceMetadata?.Data?.Github">
+                <template x-if="finding.SourceMetadata?.Data?.[source]">
                   <div class="mb-4">
                     <h3 class="font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
-                      <i class="fab fa-github text-teal-500 dark:text-teal-400 mr-2"></i>GitHub Details
+                      <i class="fab fa-github text-teal-500 dark:text-teal-400 mr-2"></i>Git Details
                     </h3>
                     <div class="bg-gray-50 dark:bg-gray-700 p-3 rounded dark-transition">
                       <div class="grid grid-cols-1 md:grid-cols-2 gap-y-2 gap-x-4">
                         <div>
                           <span class="text-gray-600 dark:text-gray-400 font-medium">Repository:</span>
                           <span class="break-all dark:text-gray-300"
-                            x-text="finding.SourceMetadata.Data.Github.repository || 'N/A'"></span>
+                            x-text="finding.SourceMetadata.Data[source].repository || 'N/A'"></span>
                         </div>
                         <div>
                           <span class="text-gray-600 dark:text-gray-400 font-medium">Commit:</span>
                           <span class="break-all dark:text-gray-300"
-                            x-text="finding.SourceMetadata.Data.Github.commit || 'N/A'"></span>
+                            x-text="finding.SourceMetadata.Data[source].commit || 'N/A'"></span>
                         </div>
                         <div>
                           <span class="text-gray-600 dark:text-gray-400 font-medium">File:</span>
                           <span class="break-all dark:text-gray-300"
-                            x-text="finding.SourceMetadata.Data.Github.file || 'N/A'"></span>
+                            x-text="finding.SourceMetadata.Data[source].file || 'N/A'"></span>
                         </div>
                         <div>
                           <span class="text-gray-600 dark:text-gray-400 font-medium">Line:</span>
                           <span class="dark:text-gray-300"
-                            x-text="finding.SourceMetadata.Data.Github.line || 'N/A'"></span>
+                            x-text="finding.SourceMetadata.Data[source].line || 'N/A'"></span>
                         </div>
                         <div class="col-span-1 md:col-span-2">
                           <span class="text-gray-600 dark:text-gray-400 font-medium">Email:</span>
                           <span class="break-all dark:text-gray-300"
-                            x-text="finding.SourceMetadata.Data.Github.email || 'N/A'"></span>
+                            x-text="finding.SourceMetadata.Data[source].email || 'N/A'"></span>
                         </div>
                         <div>
                           <span class="text-gray-600 dark:text-gray-400 font-medium">Timestamp:</span>
                           <span class="dark:text-gray-300"
-                            x-text="finding.SourceMetadata.Data.Github.timestamp || 'N/A'"></span>
+                            x-text="finding.SourceMetadata.Data[source].timestamp || 'N/A'"></span>
                         </div>
                         <div>
                           <span class="text-gray-600 dark:text-gray-400 font-medium">Visibility:</span>
                           <span class="dark:text-gray-300"
-                            x-text="finding.SourceMetadata.Data.Github.visibility === 1 ? 'Public' : 'Private'"></span>
+                            x-text="finding.SourceMetadata.Data[source].visibility === 1 ? 'Public' : 'Private'"></span>
                         </div>
                       </div>
                       <div class="mt-2">
                         <span class="text-gray-600 dark:text-gray-400 font-medium">Link:</span>
-                        <a x-bind:href="finding.SourceMetadata.Data.Github.link" target="_blank"
+                        <a x-bind:href="finding.SourceMetadata.Data[source].link" target="_blank"
                           class="text-blue-600 dark:text-blue-400 hover:underline break-all flex items-center">
-                          <span x-text="finding.SourceMetadata.Data.Github.link || 'N/A'"></span>
+                          <span x-text="finding.SourceMetadata.Data[source].link || 'N/A'"></span>
                           <i class="fas fa-external-link ml-1"></i>
                         </a>
                       </div>

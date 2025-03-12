@@ -4,7 +4,7 @@ const ReportService = {
    * Generate and download a PDF report for TruffleHog findings
    * @param {Object} data - The data needed to generate the report
    */
-  generatePDFReport(data) {
+  generatePDFReport(data, source) {
     try {
       // Check if jsPDF is loaded
       if (typeof jspdf === "undefined") {
@@ -197,9 +197,9 @@ const ReportService = {
         doc.setFontSize(10);
 
         // Repository
-        const repo = finding.SourceMetadata?.Data?.Github?.repository
+        const repo = finding.SourceMetadata?.Data?.[source]?.repository
           ? this.truncateText(
-              finding.SourceMetadata.Data.Github.repository
+              finding.SourceMetadata.Data[source].repository
                 .replace("https://github.com/", "")
                 .replace(".git", ""),
               40,
@@ -213,8 +213,8 @@ const ReportService = {
         y += 8;
 
         // File
-        const file = finding.SourceMetadata?.Data?.Github?.file
-          ? this.truncateText(finding.SourceMetadata.Data.Github.file, 40)
+        const file = finding.SourceMetadata?.Data?.[source]?.file
+          ? this.truncateText(finding.SourceMetadata.Data[source].file, 40)
           : "N/A";
 
         doc.setFont("helvetica", "bold");
@@ -224,8 +224,8 @@ const ReportService = {
         y += 8;
 
         // // Link
-        // const link = finding.SourceMetadata?.Data?.Github?.link
-        //   ? this.truncateText(finding.SourceMetadata.Data.Github.link, 50)
+        // const link = finding.SourceMetadata?.Data?.[source]?.link
+        //   ? this.truncateText(finding.SourceMetadata.Data[source].link, 50)
         //   : "N/A";
         //
         // doc.setFont("helvetica", "bold");
