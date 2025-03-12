@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TruffeleShow</title>
+  <meta name="description" content="A simple web viewer for TruffleHog JSON output." />
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png">
+  <link rel="manifest" href="/assets/site.webmanifest">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="report-service.js"></script>
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <script>
+    document.addEventListener("alpine:init", () => {
+      Alpine.data("truffleHogApp", () => ({
+        truffleHogData: [],
+        displayedData: [],
+        isFileUploaded: false,
+        isLoading: false,
+        error: null,
+        expandedItems: {},
+        isGeneratingReport: false,
+        sortBy: "verification", // Default sort
+        sortDirection: "desc", // Default direction
+
+        init() {
+        },
+
+        uploadFile(event) {
+          const file = event.target.files[0];
+          if (!file) return;
+
+          this.isLoading = true;
+          this.error = null;
+          console.log(file);
+
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            try {
+              this.truffleHogData = JSON.parse(e.target.result);
+              // Initialize all items as collapsed
+              this.expandedItems = Object.fromEntries(
+                this.truffleHogData.map((_, index) => [index, false]),
+              );
+              this.applySorting();
+              this.isFileUploaded = true;
+              this.isLoading = false;
+            } catch (error) {
+              console.error(error);
+              this.error =
+                "Invalid JSON file. Please upload a valid TruffleHog JSON output.";
+              this.isLoading = false;
+            }
+          };
+          reader.onerror = () => {
+            this.error = "Error reading file. Please try again.";
+            this.isLoading = false;
+          };
+          reader.readAsText(file);
+        },
+
+        resetApp() {
+          this.truffleHogData = [];
+          this.displayedData = [];
+          this.isFileUploaded = false;
+          this.error = null;
+          this.expandedItems = {};
+          document.getElementById("fileInput").value = "";
+        },
+
+        toggleItem(index) {
+          this.expandedItems[index] = !this.expandedItems[index];
+        },
+
+        expandAll() {
+          this.expandedItems = Object.fromEntries(
+            this.displayedData.map((_, index) => [index, true]),
+          );
+        },
+
+        collapseAll() {
+          this.expandedItems = Object.fromEntries(
+            this.displayedData.map((_, index) => [index, false]),
+          );
+        },
+
+        // Sorting functions
+        setSorting(sortType) {
+          if (this.sortBy === sortType) {
+            // Toggle direction if clicking the same sort type
+            this.sortDirection =
+              this.sortDirection === "asc" ? "desc" : "asc";
+          } else {
+            this.sortBy = sortType;
+            // Set default direction based on sort type
+            this.sortDirection = sortType === "date" ? "desc" : "desc";
+          }
+          this.applySorting();
+        },
+
+        applySorting() {
+          // Clone the array to avoid mutating the original
+          let sortedData = [...this.truffleHogData];
+
+          // Sort based on current sort settings
+          if (this.sortBy === "verification") {
+            sortedData.sort((a, b) => {
+              // Priority: Verified (highest), Not Verified, Failed (lowest)
+              const scoreA = a.Verified ? 3 : a.VerificationError ? 1 : 2;
+              const scoreB = b.Verified ? 3 : b.VerificationError ? 1 : 2;
+
+              return this.sortDirection === "asc"
+                ? scoreA - scoreB
+                : scoreB - scoreA;
+            });
+          } else if (this.sortBy === "date") {
+            sortedData.sort((a, b) => {
+              const dateA = a.SourceMetadata?.Data?.Github?.timestamp
+                ? new Date(a.SourceMetadata.Data.Github.timestamp)
+                : new Date(0);
+              const dateB = b.SourceMetadata?.Data?.Github?.timestamp
+                ? new Date(b.SourceMetadata.Data.Github.timestamp)
+                : new Date(0);
+
+              return this.sortDirection === "asc"
+                ? dateA - dateB
+                : dateB - dateA;
+            });
+          }
+
+          // Update the displayed data
+          this.displayedData = sortedData;
+
+          // Reset expanded states when sorting
+          this.expandedItems = Object.fromEntries(
+            this.displayedData.map((_, index) => [index, false]),
+          );
+        },
+
+        getSortIcon(sortType) {
+          if (this.sortBy !== sortType) return "fa-sort";
+          return this.sortDirection === "asc" ? "fa-sort-up" : "fa-sort-down";
+        },
+
+        formatTimestamp(timestamp) {
+          if (!timestamp) return "N/A";
+          return new Date(timestamp).toLocaleString();
+        },
+
+        getVerificationStatus(finding) {
+          if (finding.Verified) return "Verified";
+          return finding.VerificationError ? "Failed" : "Not Verified";
+        },
+
+        getStatusColor(finding) {
+          if (finding.Verified)
+            return "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200";
+          return finding.VerificationError
+            ? "bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200"
+            : "bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200";
+        },
+
+        getStatusIcon(finding) {
+          if (finding.Verified) return "fa-check-circle";
+          return finding.VerificationError
+            ? "fa-circle-exclamation"
+            : "fa-circle-question";
+        },
+
+        getDetectorIcon(finding) {
+          const detector = finding.DetectorName?.toLowerCase() || "";
+
+          if (detector.includes("password") || detector.includes("secret")) {
+            return "fa-key";
+          } else if (detector.includes("token") || detector.includes("api")) {
+            return "fa-key";
+          } else if (detector.includes("aws")) {
+            return "fab fa-aws";
+          } else if (
+            detector.includes("postgres") ||
+            detector.includes("sql")
+          ) {
+            return "fa-database";
+          } else if (detector.includes("github")) {
+            return "fab fa-github";
+          } else if (
+            detector.includes("email") ||
+            detector.includes("mail")
+          ) {
+            return "fa-envelope";
+          } else {
+            return "fa-shield-halved";
+          }
+        },
+
+        truncate(str, max = 30) {
+          if (!str) return "N/A";
+          return str.length > max ? str.substring(0, max) + "..." : str;
+        },
+
+        // Summary statistics
+        getTotalFindings() {
+          return this.truffleHogData.length;
+        },
+
+        getVerifiedCount() {
+          return this.truffleHogData.filter((finding) => finding.Verified)
+            .length;
+        },
+
+        getFailedCount() {
+          return this.truffleHogData.filter(
+            (finding) => finding.VerificationError,
+          ).length;
+        },
+
+        getNotVerifiedCount() {
+          return this.truffleHogData.filter(
+            (finding) => !finding.Verified && !finding.VerificationError,
+          ).length;
+        },
+
+        getUniqueDetectors() {
+          const detectors = this.truffleHogData.map(
+            (finding) => finding.DetectorName,
+          );
+          return [...new Set(detectors)].length;
+        },
+
+        getUniqueRepositories() {
+          const repos = this.truffleHogData
+            .filter(
+              (finding) => finding.SourceMetadata?.Data?.Github?.repository,
+            )
+            .map((finding) => finding.SourceMetadata.Data.Github.repository);
+          return [...new Set(repos)].length;
+        },
+
+        renderTimestamp(timestamp) {
+          return new Date(timestamp).toDateString();
+        },
+        generateReport() {
+          // Show loading indicator
+          this.isGeneratingReport = true;
+
+          // Prepare the data needed for the report
+          const reportData = {
+            stats: {
+              totalFindings: this.getTotalFindings(),
+              verifiedCount: this.getVerifiedCount(),
+              failedCount: this.getFailedCount(),
+              notVerifiedCount: this.getNotVerifiedCount(),
+              uniqueDetectors: this.getUniqueDetectors(),
+              uniqueRepositories: this.getUniqueRepositories()
+            },
+            findings: this.displayedData
+          };
+
+          // Use the report service to generate the report
+          ReportService.generatePDFReport(reportData)
+          this.isGeneratingReport = false;
+        }
+      }));
+    });
+  </script>
+  <style>
+    /* Custom styles for dark mode transitions */
+    .dark-transition {
+      transition:
+        background-color 0.3s ease,
+        color 0.3s ease,
+        border-color 0.3s ease;
+    }
+
+    [x-cloak] {
+      display: none !important;
+    }
+  </style>
+</head>
+
+<body class="min-h-screen dark-transition dark:bg-gray-900">
+  <div x-data="truffleHogApp" class="container mx-auto py-8 px-4">
+    <h1 class="text-3xl font-bold text-center mb-8 text-gray-800 dark:text-white">
+      <i class="fas fa-file-shield text-teal-600 dark:text-teal-400 mr-2"></i>
+      TruffleShow
+      <p class="text-sm text-center text-gray-600 dark:text-gray-400 mt-2">
+        v0.1.0 <!--x-release-please-version-->
+      </p>
+    </h1>
+    <p class="text-center text-gray-600 dark:text-gray-400 mb-8">
+      A simple web viewer for TruffleHog JSON output.
+    </p>
+
+    <!-- File Upload Section -->
+    <div x-show="!isFileUploaded"
+      class="max-w-md mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 dark-transition">
+      <h2 class="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-200">
+        <i class="fas fa-upload text-teal-500 dark:text-teal-400 mr-2"></i>Upload TruffleHog JSON Output
+      </h2>
+
+      <div class="mb-4">
+        <label for="fileInput" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          Select a JSON file with TruffleHog results
+        </label>
+        <div class="flex items-center justify-center w-full">
+          <label
+            class="flex flex-col w-full h-32 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 dark-transition">
+            <div class="flex flex-col items-center justify-center pt-7">
+              <i class="fas fa-file-arrow-up text-gray-400 dark:text-gray-500 text-3xl mb-2"></i>
+              <p class="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                Click to browse or drag & drop
+              </p>
+              <p class="text-xs text-gray-500 dark:text-gray-500">
+                .json files only
+              </p>
+            </div>
+            <input id="fileInput" type="file" accept=".json" @change="uploadFile($event)" class="hidden" />
+          </label>
+        </div>
+      </div>
+
+      <div x-cloak x-show="isLoading" class="flex justify-center my-4">
+        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600 dark:border-teal-400"></div>
+      </div>
+
+      <div x-cloak x-show="error"
+        class="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-300 px-4 py-3 rounded mb-4">
+        <i class="fas fa-circle-exclamation mr-2"></i>
+        <span x-text="error"></span>
+      </div>
+    </div>
+    <div x-cloak x-show="! isFileUploaded">
+      <p class="text-center text-xs text-gray-600 dark:text-gray-400 mt-2">
+        Built with
+        <a class="text-blue-400 hover:underline" href="https://alpinejs.dev" target="_blank"
+          rel="noopener noreferrer">Alpine.js</a> and
+        <a class="text-blue-400 hover:underline" href="https://tailwindcss.com" target="_blank"
+          rel="noopener noreferrer">Tailwind CSS</a>.
+        View the source code on <a href="https://github.com/alioguzhan/truffleshow"
+          class="text-blue-600 dark:text-blue-400 hover:underline" target="_blank">GitHub</a>.
+      </p>
+    </div>
+    <div <!-- Results Section -->
+      <div x-cloak x-show="isFileUploaded" class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 dark-transition">
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="text-2xl font-semibold text-gray-800 dark:text-white">
+            <i class="fas fa-list-check text-teal-600 dark:text-teal-400 mr-2"></i>TruffleHog Findings
+          </h2>
+          <div class="flex items-center space-x-2">
+            <button @click="generateReport"
+              class="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white  rounded hover:bg-blue-700 dark:hover:bg-blue-600 transition flex items-center">
+              <template x-if="!isGeneratingReport">
+                <i class="fas fa-file-pdf mr-1"></i>
+              </template>
+              <template x-if="isGeneratingReport">
+                <i class="fas fa-spinner fa-spin mr-1"></i>
+              </template>
+              <span x-text="isGeneratingReport ? 'Generating PDF...' : 'Download PDF'"></span>
+            </button>
+            <button @click="resetApp"
+              class="px-4 py-2 bg-teal-600 dark:bg-teal-700 text-white rounded hover:bg-teal-700 dark:hover:bg-teal-600 transition">
+              <i class="fas fa-upload mr-2"></i>Upload Another File
+            </button>
+          </div>
+
+        </div>
+
+        <!-- Summary Section -->
+        <div class="mb-6 bg-gray-50 dark:bg-gray-700 rounded-lg p-4 shadow-sm dark-transition">
+          <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-3 flex items-center">
+            <i class="fas fa-chart-pie text-teal-600 dark:text-teal-400 mr-2"></i>Summary
+          </h3>
+
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <!-- Total Findings -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm dark-transition">
+              <div class="text-sm text-gray-600 dark:text-gray-400">
+                Total Findings
+              </div>
+              <div class="text-2xl font-bold text-gray-800 dark:text-white flex items-center">
+                <i class="fas fa-search-plus text-teal-500 dark:text-teal-400 mr-2"></i>
+                <span x-text="getTotalFindings()"></span>
+              </div>
+            </div>
+
+            <!-- Verified Count -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm dark-transition">
+              <div class="text-sm text-gray-600 dark:text-gray-400">
+                Verified
+              </div>
+              <div class="text-2xl font-bold text-green-600 dark:text-green-400 flex items-center">
+                <i class="fas fa-check-circle mr-2"></i>
+                <span x-text="getVerifiedCount()"></span>
+              </div>
+            </div>
+
+            <!-- Failed Count -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm dark-transition">
+              <div class="text-sm text-gray-600 dark:text-gray-400">
+                Failed Verification
+              </div>
+              <div class="text-2xl font-bold text-red-600 dark:text-red-400 flex items-center">
+                <i class="fas fa-circle-exclamation mr-2"></i>
+                <span x-text="getFailedCount()"></span>
+              </div>
+            </div>
+
+            <!-- Not Verified Count -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm dark-transition">
+              <div class="text-sm text-gray-600 dark:text-gray-400">
+                Not Verified
+              </div>
+              <div class="text-2xl font-bold text-yellow-600 dark:text-yellow-400 flex items-center">
+                <i class="fas fa-circle-question mr-2"></i>
+                <span x-text="getNotVerifiedCount()"></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <!-- Additional Stats -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm dark-transition">
+              <div class="text-sm text-gray-600 dark:text-gray-400">
+                Unique Detectors
+              </div>
+              <div class="text-2xl font-bold text-gray-800 dark:text-white flex items-center">
+                <i class="fas fa-fingerprint text-teal-500 dark:text-teal-400 mr-2"></i>
+                <span x-text="getUniqueDetectors()"></span>
+              </div>
+            </div>
+
+            <!-- Repositories Count -->
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm dark-transition">
+              <div class="text-sm text-gray-600 dark:text-gray-400">
+                Unique Repositories
+              </div>
+              <div class="text-2xl font-bold text-gray-800 dark:text-white flex items-center">
+                <i class="fas fa-code-branch text-teal-500 dark:text-teal-400 mr-2"></i>
+                <span x-text="getUniqueRepositories()"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sort and Expand/Collapse Controls -->
+          <div class="flex flex-wrap justify-between mt-4">
+            <!-- Sort Controls -->
+            <div class="flex space-x-2 mb-2 sm:mb-0">
+              <button @click="setSorting('verification')"
+                class="px-3 py-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition flex items-center"
+                :class="sortBy === 'verification' ? 'bg-teal-50 dark:bg-teal-900 border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-300' : ''">
+                <i class="fas fa-shield-check mr-1"></i>Sort by Verification
+                <i class="fas ml-1" :class="getSortIcon('verification')"></i>
+              </button>
+              <button @click="setSorting('date')"
+                class="px-3 py-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition flex items-center"
+                :class="sortBy === 'date' ? 'bg-teal-50 dark:bg-teal-900 border-teal-200 dark:border-teal-800 text-teal-700 dark:text-teal-300' : ''">
+                <i class="fas fa-calendar mr-1"></i>Sort by Date
+                <i class="fas ml-1" :class="getSortIcon('date')"></i>
+              </button>
+            </div>
+
+            <!-- Expand/Collapse Controls -->
+            <div class="flex space-x-2">
+              <button @click="expandAll"
+                class="px-3 py-1 bg-teal-600 dark:bg-teal-700 text-white text-sm rounded hover:bg-teal-700 dark:hover:bg-teal-600 transition flex items-center">
+                <i class="fas fa-chevron-down mr-1"></i>Expand All
+              </button>
+              <button @click="collapseAll"
+                class="px-3 py-1 bg-gray-500 dark:bg-gray-600 text-white text-sm rounded hover:bg-gray-600 dark:hover:bg-gray-500 transition flex items-center">
+                <i class="fas fa-chevron-up mr-1"></i>Collapse All
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <template x-if="displayedData.length === 0">
+            <div class="text-center py-8 text-gray-600 dark:text-gray-400">
+              <i class="fas fa-file-circle-xmark text-gray-400 dark:text-gray-500 text-5xl mb-4"></i>
+              <p>No findings to display</p>
+            </div>
+          </template>
+
+          <template x-for="(finding, index) in displayedData" :key="index">
+            <div class="mb-4 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden dark-transition">
+              <!-- Header (always visible) -->
+              <div @click="toggleItem(index)"
+                class="bg-gray-50 dark:bg-gray-700 px-4 py-3 border-b border-gray-200 dark:border-gray-600 flex items-center justify-between cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition dark-transition">
+                <div class="flex items-center space-x-3 overflow-hidden">
+                  <i :class="`fas ${getDetectorIcon(finding)} text-teal-600 dark:text-teal-400`"></i>
+                  <div class="flex items-center space-x-2 overflow-hidden">
+                    <div class="font-medium text-gray-800 dark:text-white" x-text="finding.DetectorName"></div>
+
+                    <template x-if="finding.SourceMetadata?.Data?.Github?.link">
+                      <a :href="finding.SourceMetadata.Data.Github.link" target="_blank"
+                        class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                        @click.stop>
+                        <i class="fas fa-arrow-up-right-from-square"></i>
+                      </a>
+                    </template>
+                  </div>
+                </div>
+
+                <div class="flex items-center space-x-3">
+                  <template x-if="finding.SourceMetadata?.Data?.Github?.timestamp">
+                    <div class="hidden md:flex items-center text-sm text-gray-600 dark:text-gray-400">
+                      <i class="far fa-clock mr-1"></i>
+                      <span x-text="`${renderTimestamp(finding.SourceMetadata.Data.Github.timestamp)}`"></span>
+                    </div>
+                  </template>
+
+                  <template x-if="finding.SourceMetadata?.Data?.Github?.repository">
+                    <a :href="finding.SourceMetadata.Data.Github.repository" target="_blank"
+                      class="hidden md:flex items-center text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                      @click.stop>
+                      <i class="fas fa-code-branch mr-1"></i>
+                      <span
+                        x-text="finding.SourceMetadata.Data.Github.repository.replace('https://github.com/', '').replace('.git', '')"></span>
+                    </a>
+                  </template>
+
+                  <template x-if="finding.SourceMetadata?.Data?.Github?.commit">
+                    <a :href="finding.SourceMetadata.Data.Github.repository ? finding.SourceMetadata.Data.Github.repository.replace('.git', '') + '/commit/' + finding.SourceMetadata.Data.Github.commit : '#'"
+                      target="_blank"
+                      class="hidden md:flex items-center text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                      @click.stop>
+                      <i class="fas fa-code-commit mr-1"></i>
+                      <span x-text="truncate(finding.SourceMetadata.Data.Github.commit, 7)"></span>
+                    </a>
+                  </template>
+
+                  <div :class="getStatusColor(finding)"
+                    class="px-2 py-1 rounded-full text-xs font-medium flex items-center dark-transition">
+                    <i :class="`fas ${getStatusIcon(finding)} mr-1`"></i>
+                    <span x-text="getVerificationStatus(finding)"></span>
+                  </div>
+
+                  <i class="fas" :class="expandedItems[index] ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                </div>
+              </div>
+
+              <!-- Expandable Content -->
+              <div x-show="expandedItems[index]" x-collapse class="p-4 dark:bg-gray-800 dark-transition">
+                <!-- Source Info -->
+                <div class="mb-4">
+                  <h3 class="font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
+                    <i class="fas fa-circle-info text-teal-500 dark:text-teal-400 mr-2"></i>Source Information
+                  </h3>
+                  <div
+                    class="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 dark:bg-gray-700 p-3 rounded dark-transition">
+                    <div>
+                      <span class="text-gray-600 dark:text-gray-400 font-medium">Source:</span>
+                      <span class="dark:text-gray-300" x-text="finding.SourceName || 'N/A'"></span>
+                    </div>
+                    <div>
+                      <span class="text-gray-600 dark:text-gray-400 font-medium">Detector:</span>
+                      <span class="dark:text-gray-300" x-text="finding.DetectorName || 'N/A'"></span>
+                    </div>
+                    <div class="col-span-1 md:col-span-2">
+                      <span class="text-gray-600 dark:text-gray-400 font-medium">Description:</span>
+                      <span class="dark:text-gray-300" x-text="finding.DetectorDescription || 'N/A'"></span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- GitHub Info if available -->
+                <template x-if="finding.SourceMetadata?.Data?.Github">
+                  <div class="mb-4">
+                    <h3 class="font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
+                      <i class="fab fa-github text-teal-500 dark:text-teal-400 mr-2"></i>GitHub Details
+                    </h3>
+                    <div class="bg-gray-50 dark:bg-gray-700 p-3 rounded dark-transition">
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-y-2 gap-x-4">
+                        <div>
+                          <span class="text-gray-600 dark:text-gray-400 font-medium">Repository:</span>
+                          <span class="break-all dark:text-gray-300"
+                            x-text="finding.SourceMetadata.Data.Github.repository || 'N/A'"></span>
+                        </div>
+                        <div>
+                          <span class="text-gray-600 dark:text-gray-400 font-medium">Commit:</span>
+                          <span class="break-all dark:text-gray-300"
+                            x-text="finding.SourceMetadata.Data.Github.commit || 'N/A'"></span>
+                        </div>
+                        <div>
+                          <span class="text-gray-600 dark:text-gray-400 font-medium">File:</span>
+                          <span class="break-all dark:text-gray-300"
+                            x-text="finding.SourceMetadata.Data.Github.file || 'N/A'"></span>
+                        </div>
+                        <div>
+                          <span class="text-gray-600 dark:text-gray-400 font-medium">Line:</span>
+                          <span class="dark:text-gray-300"
+                            x-text="finding.SourceMetadata.Data.Github.line || 'N/A'"></span>
+                        </div>
+                        <div class="col-span-1 md:col-span-2">
+                          <span class="text-gray-600 dark:text-gray-400 font-medium">Email:</span>
+                          <span class="break-all dark:text-gray-300"
+                            x-text="finding.SourceMetadata.Data.Github.email || 'N/A'"></span>
+                        </div>
+                        <div>
+                          <span class="text-gray-600 dark:text-gray-400 font-medium">Timestamp:</span>
+                          <span class="dark:text-gray-300"
+                            x-text="finding.SourceMetadata.Data.Github.timestamp || 'N/A'"></span>
+                        </div>
+                        <div>
+                          <span class="text-gray-600 dark:text-gray-400 font-medium">Visibility:</span>
+                          <span class="dark:text-gray-300"
+                            x-text="finding.SourceMetadata.Data.Github.visibility === 1 ? 'Public' : 'Private'"></span>
+                        </div>
+                      </div>
+                      <div class="mt-2">
+                        <span class="text-gray-600 dark:text-gray-400 font-medium">Link:</span>
+                        <a x-bind:href="finding.SourceMetadata.Data.Github.link" target="_blank"
+                          class="text-blue-600 dark:text-blue-400 hover:underline break-all flex items-center">
+                          <span x-text="finding.SourceMetadata.Data.Github.link || 'N/A'"></span>
+                          <i class="fas fa-external-link ml-1"></i>
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+
+                <!-- Credential Info -->
+                <div class="mb-4">
+                  <h3 class="font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
+                    <i class="fas fa-key text-teal-500 dark:text-teal-400 mr-2"></i>Credential Details
+                  </h3>
+                  <div class="bg-gray-50 dark:bg-gray-700 p-3 rounded dark-transition">
+                    <div>
+                      <span class="text-gray-600 dark:text-gray-400 font-medium">Raw:</span>
+                      <code class="bg-gray-200 dark:bg-gray-600 px-2 py-1 rounded break-all dark:text-gray-300"
+                        x-text="finding.Raw || 'N/A'"></code>
+                    </div>
+                    <div class="mt-2" x-show="finding.VerificationError">
+                      <span class="text-gray-600 dark:text-gray-400 font-medium">Verification Error:</span>
+                      <span class="text-red-600 dark:text-red-400" x-text="finding.VerificationError || 'N/A'"></span>
+                    </div>
+                    <div class="mt-2">
+                      <span class="text-gray-600 dark:text-gray-400 font-medium">Decoder:</span>
+                      <span class="dark:text-gray-300" x-text="finding.DecoderName || 'N/A'"></span>
+                    </div>
+                    <div class="mt-2">
+                      <span class="text-gray-600 dark:text-gray-400 font-medium">Verification From Cache:</span>
+                      <span class="dark:text-gray-300" x-text="finding.VerificationFromCache ? 'Yes' : 'No'"></span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Extra Data if present -->
+                <template x-if="finding.ExtraData && Object.keys(finding.ExtraData).length > 0">
+                  <div class="mb-4">
+                    <h3 class="font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
+                      <i class="fas fa-circle-info text-teal-500 dark:text-teal-400 mr-2"></i>Additional Information
+                    </h3>
+                    <div class="bg-gray-50 dark:bg-gray-700 p-3 rounded dark-transition">
+                      <template x-for="(value, key) in finding.ExtraData" :key="key">
+                        <div class="mb-1">
+                          <span class="text-gray-600 dark:text-gray-400 font-medium" x-text="key + ':'"></span>
+                          <span class="dark:text-gray-300" x-text="value"></span>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+</body>
+
+</html>
