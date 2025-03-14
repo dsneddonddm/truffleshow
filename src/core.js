@@ -12,6 +12,7 @@ document.addEventListener("alpine:init", () => {
     supportedSources: ["Git", "Github"],
     source: undefined,
     sampleDataURL: "https://static.truffleshow.dev/github-sample.json",
+    fileName: null,
 
     init() { },
 
@@ -21,6 +22,7 @@ document.addEventListener("alpine:init", () => {
 
       this.isLoading = true;
       this.error = null;
+      this.fileName = file.name;
 
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -61,6 +63,7 @@ document.addEventListener("alpine:init", () => {
       fetch(this.sampleDataURL)
         .then((response) => response.text())
         .then((data) => {
+          this.fileName = "github-sample.json";
           this.loadFile(data);
         })
         .catch((error) => {
