@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/alioguzhan/truffleshow/compare/0.3.0...0.4.0) (2025-03-14)
+
+
+### Features
+
+* show the uploaded file name next to the header ([a77d8b1](https://github.com/alioguzhan/truffleshow/commit/a77d8b160980320d779efa4d6cd2aa93b73472ba))
+
 ## [0.3.0](https://github.com/alioguzhan/truffleshow/compare/0.2.0...0.3.0) (2025-03-14)
 
 
