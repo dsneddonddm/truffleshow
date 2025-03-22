@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/alioguzhan/truffleshow/compare/0.4.0...0.4.1) (2025-03-22)
+
+
+### Bug Fixes
+
+* **theme:** wrong color on code block in the file upload area ([e12efbc](https://github.com/alioguzhan/truffleshow/commit/e12efbcae5bdbc6451268151c5163b0a7b7c0f08))
+
 ## [0.4.0](https://github.com/alioguzhan/truffleshow/compare/0.3.0...0.4.0) (2025-03-14)
 
 
