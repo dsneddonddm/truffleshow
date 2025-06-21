@@ -21,8 +21,8 @@ const ReportService = {
       doc.setProperties({
         title: "TruffleHog Security Findings Report",
         subject: "Security Findings",
-        author: "TruffleShow",
-        creator: "TruffleShow App",
+        author: "Derek Sneddon",
+        creator: "TruffleShow App (DDM Edition)",
       });
 
       // Document dimensions
@@ -141,7 +141,8 @@ const ReportService = {
       // Process each finding
       for (const finding of data.findings) {
         // Check if we need a new page
-        if (y > doc.internal.pageSize.getHeight() - 50) {
+        // Adjust this threshold if needed based on your content
+        if (y > doc.internal.pageSize.getHeight() - 70) {
           doc.addPage();
           y = margin;
         }
@@ -168,7 +169,11 @@ const ReportService = {
         // Draw finding card
         doc.setFillColor(243, 244, 246);
         doc.setDrawColor(229, 231, 235);
-        doc.roundedRect(margin, y, contentWidth, 15, 2, 2, "FD");
+        // This rectangle height might need to be dynamic based on wrapped text, or
+        // you might need to draw the rectangle *after* calculating text height.
+        // For now, we'll give it a generous height or calculate it later.
+        const findingCardStartY = y; // Remember starting Y for this card
+        doc.roundedRect(margin, y, contentWidth, 15, 2, 2, "FD"); // Initial rect, height might change
 
         // Draw header with finding detector name
         doc.setTextColor(0, 0, 0);
@@ -196,64 +201,48 @@ const ReportService = {
         doc.setTextColor(0, 0, 0);
         doc.setFontSize(10);
 
+        // Define a common starting X for values to align them
+        const valueStartX = margin + 60;
+        const availableWidthForText = contentWidth - 60; // contentWidth - (valueStartX - margin)
+
+        const lineHeight = doc.getLineHeight() / doc.internal.scaleFactor; // Get current line height
+
+        // Helper function to handle text and update Y
+        const addWrappedText = (label, textContent, yPos) => {
+            doc.setFont("helvetica", "bold");
+            doc.text(label, margin, yPos);
+            doc.setFont("helvetica", "normal");
+            const textLines = doc.text(textContent, valueStartX, yPos, { maxWidth: availableWidthForText });
+            // Ensure textLines is an array, then calculate height
+            const numLines = Array.isArray(textLines) ? textLines.length : 1;
+            return yPos + numLines * lineHeight + 10; // Add spacing
+        };
+
         // Repository
         const repo = finding.SourceMetadata?.Data?.[source]?.repository
-          ? this.truncateText(
-              finding.SourceMetadata.Data[source].repository
-                .replace("https://github.com/", "")
-                .replace(".git", ""),
-              40,
-            )
+          ? finding.SourceMetadata.Data[source].repository
+              .replace("https://github.com/", "")
+              .replace(".git", "")
           : "N/A";
+        y = addWrappedText("Repository:", repo, y);
 
-        doc.setFont("helvetica", "bold");
-        doc.text("Repository:", margin, y);
-        doc.setFont("helvetica", "normal");
-        doc.text(repo, margin + 60, y);
-        y += 8;
 
         // File
-        const file = finding.SourceMetadata?.Data?.[source]?.file
-          ? this.truncateText(finding.SourceMetadata.Data[source].file, 40)
-          : "N/A";
+        const file = finding.SourceMetadata?.Data?.[source]?.file;
+        y = addWrappedText("File:", file, y);
 
-        doc.setFont("helvetica", "bold");
-        doc.text("File:", margin, y);
-        doc.setFont("helvetica", "normal");
-        doc.text(file, margin + 60, y);
-        y += 8;
-
-        // // Link
-        // const link = finding.SourceMetadata?.Data?.[source]?.link
-        //   ? this.truncateText(finding.SourceMetadata.Data[source].link, 50)
-        //   : "N/A";
-        //
-        // doc.setFont("helvetica", "bold");
-        // doc.text("Link:", margin, y);
-        // doc.setFont("helvetica", "normal");
-        // doc.text(link, margin + 60, y);
-        // y += 8;
+        // Link
+        const link = finding.SourceMetadata?.Data?.[source]?.link || "N/A";
+        y = addWrappedText("Link:", link, y);
 
         // Credential
-        const credential = finding.Raw
-          ? this.truncateText(finding.Raw, 50)
-          : "N/A";
+        const credential = finding.Raw;
+        y = addWrappedText("Credential:", credential, y);
 
-        doc.setFont("helvetica", "bold");
-        doc.text("Credential:", margin, y);
-        doc.setFont("helvetica", "normal");
-        doc.text(credential, margin + 60, y);
-        y += 8;
+        // Description - The primary focus for wrapping
+        const description = finding.DetectorDescription;
+        y = addWrappedText("Description:", description, y);
 
-        // Description
-        const description = finding.DetectorDescription
-          ? this.truncateText(finding.DetectorDescription, 50)
-          : "N/A";
-
-        doc.setFont("helvetica", "bold");
-        doc.text("Description:", margin, y);
-        doc.setFont("helvetica", "normal");
-        doc.text(description, margin + 60, y);
 
         // Add spacing between findings
         y += 15;
