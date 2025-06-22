@@ -23,6 +23,11 @@ Screenshot:
 
 ![TruffleShow Screenshot](./ss.png)
 
+## TODO
+
+- Fix table of contents extra page gen bug
+- Fix bug for repo links only going to the home page of the repo (has something to do with JSPDF freaking out about taking the whole link)
+
 ## License
 
 MIT
