@@ -13,11 +13,12 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://unpkg.com/jspdf@2.5.1/dist/plugins/acroform.min.js"></script>
+  
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="report-service.js"></script>
-  <script src="core.js"></script>
-  <!-- Font Awesome -->
+  
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -32,8 +33,7 @@
       <p class="text-sm text-center text-gray-600 dark:text-gray-400 mt-2">
         <a href="https://github.com/alioguzhan/truffleshow/blob/main/CHANGELOG.md" target="_blank"
           class="hover:dark:text-gray-200">
-          v0.4.1 <!--x-release-please-version-->
-        </a>
+          v0.4.1 </a>
         <a href="https://github.com/alioguzhan/truffleshow" target="_blank" class="ml-2 hover:dark:text-gray-200">
           <i class="fab fa-github mr-2"></i>
         </a>
@@ -46,7 +46,6 @@
       Currently supported sources: <span class="font-bold" x-text="supportedSources.join(', ')"></span>
     </p>
 
-    <!-- File Upload Section -->
     <div x-show="!isFileUploaded"
       class="max-w-lg mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-md p-8 dark-transition">
       <h2 class="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-200 text-center">
@@ -111,8 +110,7 @@
           class="text-blue-600 dark:text-blue-400 hover:underline" target="_blank">GitHub</a>.
       </p>
     </div>
-    <div <!-- Results Section -->
-      <div x-cloak x-show="isFileUploaded" class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 dark-transition">
+    <div <div x-cloak x-show="isFileUploaded" class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 dark-transition">
         <div class="flex justify-between items-center mb-6">
           <h2 class="text-2xl font-semibold text-gray-800 dark:text-white">
             <i class="fas fa-list-check text-teal-600 dark:text-teal-400 mr-1"></i>Findings
@@ -137,14 +135,12 @@
 
         </div>
 
-        <!-- Summary Section -->
         <div class="mb-6 bg-gray-50 dark:bg-gray-700 rounded-lg p-4 shadow-sm dark-transition">
           <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-3 flex items-center">
             <i class="fas fa-chart-pie text-teal-600 dark:text-teal-400 mr-2"></i>Summary
           </h3>
 
           <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <!-- Total Findings -->
             <div class="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm dark-transition">
               <div class="text-sm text-gray-600 dark:text-gray-400">
                 Total Findings
@@ -155,7 +151,6 @@
               </div>
             </div>
 
-            <!-- Verified Count -->
             <div class="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm dark-transition">
               <div class="text-sm text-gray-600 dark:text-gray-400">
                 Verified
@@ -166,7 +161,6 @@
               </div>
             </div>
 
-            <!-- Failed Count -->
             <div class="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm dark-transition">
               <div class="text-sm text-gray-600 dark:text-gray-400">
                 Failed Verification
@@ -177,7 +171,6 @@
               </div>
             </div>
 
-            <!-- Not Verified Count -->
             <div class="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm dark-transition">
               <div class="text-sm text-gray-600 dark:text-gray-400">
                 Not Verified
@@ -190,7 +183,6 @@
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            <!-- Additional Stats -->
             <div class="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm dark-transition">
               <div class="text-sm text-gray-600 dark:text-gray-400">
                 Unique Detectors
@@ -201,7 +193,6 @@
               </div>
             </div>
 
-            <!-- Repositories Count -->
             <div class="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-sm dark-transition">
               <div class="text-sm text-gray-600 dark:text-gray-400">
                 Unique Repositories
@@ -213,9 +204,7 @@
             </div>
           </div>
 
-          <!-- Sort and Expand/Collapse Controls -->
           <div class="flex flex-wrap justify-between mt-4">
-            <!-- Sort Controls -->
             <div class="flex space-x-2 mb-2 sm:mb-0">
               <button @click="setSorting('verification')"
                 class="px-3 py-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm rounded border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition flex items-center"
@@ -231,7 +220,6 @@
               </button>
             </div>
 
-            <!-- Expand/Collapse Controls -->
             <div class="flex space-x-2">
               <button @click="expandAll"
                 class="px-3 py-1 bg-teal-600 dark:bg-teal-700 text-white text-sm rounded hover:bg-teal-700 dark:hover:bg-teal-600 transition flex items-center">
@@ -255,7 +243,6 @@
 
           <template x-for="(finding, index) in displayedData" :key="index">
             <div class="mb-4 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden dark-transition">
-              <!-- Header (always visible) -->
               <div @click="toggleItem(index)"
                 class="bg-gray-50 dark:bg-gray-700 px-4 py-3 border-b border-gray-200 dark:border-gray-600 flex items-center justify-between cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition dark-transition">
                 <div class="flex items-center space-x-3 overflow-hidden">
@@ -311,9 +298,7 @@
                 </div>
               </div>
 
-              <!-- Expandable Content -->
               <div x-show="expandedItems[index]" x-collapse class="p-4 dark:bg-gray-800 dark-transition">
-                <!-- Source Info -->
                 <div class="mb-4">
                   <h3 class="font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
                     <i class="fas fa-circle-info text-teal-500 dark:text-teal-400 mr-2"></i>Source Information
@@ -335,7 +320,6 @@
                   </div>
                 </div>
 
-                <!-- GitHub Info if available -->
                 <template x-if="finding.SourceMetadata?.Data?.[source]">
                   <div class="mb-4">
                     <h3 class="font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
@@ -391,7 +375,6 @@
                   </div>
                 </template>
 
-                <!-- Credential Info -->
                 <div class="mb-4">
                   <h3 class="font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
                     <i class="fas fa-key text-teal-500 dark:text-teal-400 mr-2"></i>Credential Details
@@ -417,7 +400,6 @@
                   </div>
                 </div>
 
-                <!-- Extra Data if present -->
                 <template x-if="finding.ExtraData && Object.keys(finding.ExtraData).length > 0">
                   <div class="mb-4">
                     <h3 class="font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
@@ -439,6 +421,10 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <script src="report-service.js"></script>
+  <script src="core.js"></script>
 </body>
 
 </html>
